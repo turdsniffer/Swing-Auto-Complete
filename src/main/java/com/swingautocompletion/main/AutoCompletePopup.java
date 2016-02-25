@@ -50,6 +50,8 @@ import javax.swing.BoxLayout;
 import javax.swing.JList;
 import javax.swing.JScrollPane;
 import javax.swing.JWindow;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.text.BadLocationException;
@@ -60,254 +62,295 @@ import javax.swing.text.JTextComponent;
  */
 public class AutoCompletePopup extends JWindow
 {
-	private JList list;
-	private PopupListModel model;
-	private List<AutoCompleteItem> items = new ArrayList<AutoCompleteItem>();
-	private Map<String, AutoCompleteItem> autoCompleteIdToItemMap;
-	private Set<AutoCompleteItem> subSuggestions;
-	private JTextComponent textComponent;
-	private List<AutoCompleteHandler> autoCompleteHandlers;
-	private SearchStrategy searchStrategy;
-	private SubSuggestionsWordSearchProvider subSuggestionsWordSearchProvider;
-	private SearchTermProvider searchTermProvider;
-	private PropertiesWindow propertiesWindow;
-	private final Dimension dimension = new Dimension(300, 200);
 
-	public AutoCompletePopup(JTextComponent textComponent)
-	{
-		this(textComponent, new PopupListCellRenderer(), new SubSuggestionsWordSearchProvider(), new DefaultSearchTermProvider());
-	}
+    private JList list;
+    private PopupListModel model;
+    private List<AutoCompleteItem> items = new ArrayList<AutoCompleteItem>();
+    private Map<String, AutoCompleteItem> autoCompleteIdToItemMap;
+    private Set<AutoCompleteItem> subSuggestions;
+    private JTextComponent textComponent;
+    private List<AutoCompleteHandler> autoCompleteHandlers;
+    private SearchStrategy searchStrategy;
+    private SubSuggestionsWordSearchProvider subSuggestionsWordSearchProvider;
+    private SearchTermProvider searchTermProvider;
+    private PropertiesWindow propertiesWindow;
+    private final Dimension dimension = new Dimension(300, 200);
 
-	public AutoCompletePopup(JTextComponent textComponent, PopupListCellRenderer popupListCellRenderer, SubSuggestionsWordSearchProvider subSuggestionsWordSearchProvider, SearchTermProvider searchTermProvider)
-	{
-		this.propertiesWindow = new PropertiesWindow(this);
-		this.subSuggestionsWordSearchProvider = subSuggestionsWordSearchProvider;
-		this.autoCompleteIdToItemMap = new HashMap<String, AutoCompleteItem>();
-		this.subSuggestions = new TreeSet<AutoCompleteItem>();
-		this.searchStrategy = new LinearSearch();
-		this.searchTermProvider = searchTermProvider;
+    public AutoCompletePopup(JTextComponent textComponent)
+    {
+        this(textComponent, new PopupListCellRenderer(), new SubSuggestionsWordSearchProvider(), new DefaultSearchTermProvider());
+    }
 
-		autoCompleteHandlers = new ArrayList<AutoCompleteHandler>();
-		this.textComponent = textComponent;
-		addListenersToTextComponent();
-		this.setAlwaysOnTop(true);
-		getContentPane().setLayout(
-				new BoxLayout(getContentPane(), BoxLayout.PAGE_AXIS));
+    public AutoCompletePopup(JTextComponent textComponent, PopupListCellRenderer popupListCellRenderer, SubSuggestionsWordSearchProvider subSuggestionsWordSearchProvider, SearchTermProvider searchTermProvider)
+    {
+        this.propertiesWindow = new PropertiesWindow(this);
+        this.subSuggestionsWordSearchProvider = subSuggestionsWordSearchProvider;
+        this.autoCompleteIdToItemMap = new HashMap<String, AutoCompleteItem>();
+        this.subSuggestions = new TreeSet<AutoCompleteItem>();
+        this.searchStrategy = new LinearSearch();
+        this.searchTermProvider = searchTermProvider;
 
-		model = new PopupListModel();
-		list = new JList(model);
-		list.setCellRenderer(popupListCellRenderer);
-		JScrollPane jScrollPane = new JScrollPane(list);
-		list.setBackground(Color.LIGHT_GRAY);
-		list.addListSelectionListener(new ListSelectionListener()
-		{
-			@Override
-			public void valueChanged(ListSelectionEvent lse)
-			{
-				if (!lse.getValueIsAdjusting())
-				{
-					int selectedIndex = list.getSelectedIndex();
-					if (selectedIndex < 0)
-						return;
-					AutoCompleteItem item = model.getItem(selectedIndex);
-					if (item != null)
-						propertiesWindow.showProperties(item);
-				}
-			}
-		});
+        autoCompleteHandlers = new ArrayList<AutoCompleteHandler>();
+        this.textComponent = textComponent;
+        addListenersToTextComponent();
+        this.setAlwaysOnTop(true);
+        getContentPane().setLayout(
+            new BoxLayout(getContentPane(), BoxLayout.PAGE_AXIS));
 
-		this.setPreferredSize(dimension);
-		this.add(jScrollPane);
-		this.doLayout();
-		pack();
-	}
+        model = new PopupListModel();
+        list = new JList(model);
+        list.setCellRenderer(popupListCellRenderer);
+        JScrollPane jScrollPane = new JScrollPane(list);
+        list.setBackground(Color.LIGHT_GRAY);
+        list.addListSelectionListener(new ListSelectionListener()
+        {
+            @Override
+            public void valueChanged(ListSelectionEvent lse)
+            {
+                if (!lse.getValueIsAdjusting())
+                {
+                    int selectedIndex = list.getSelectedIndex();
+                    if (selectedIndex < 0)
+                        return;
+                    AutoCompleteItem item = model.getItem(selectedIndex);
+                    if (item != null)
+                        propertiesWindow.showProperties(item);
+                }
+            }
+        });
 
-	private void addListenersToTextComponent()
-	{
-		KeyAdapter keyAdapter = new KeyAdapter()
-		{
+        this.setPreferredSize(dimension);
+        this.add(jScrollPane);
+        this.doLayout();
+        pack();
+    }
 
-			public void keyPressed(KeyEvent e)
-			{
-				if (e.isConsumed()) return;
+    private void initiateUpdate(KeyEvent e)
+    {
+        if (e != null && e.isShiftDown() && e.isControlDown())
+            searchStrategy = new LinearContainsSearch();
+        else
+            searchStrategy = new LinearSearch();
 
-				if (e.getKeyCode() == KeyEvent.VK_SPACE && (e.isControlDown() || e.isShiftDown()))
-					initiateUpdate(e);
-				if (AutoCompletePopup.this.isVisible())
-				{
-					if (e.getKeyCode() == KeyEvent.VK_ENTER)
-					{
-						insertSelectedItem();
-						e.consume();
-					}
-					else if (e.getKeyCode() == KeyEvent.VK_DOWN)
-					{
-						moveDown();
-						e.consume();
-					}
-					else if (e.getKeyCode() == KeyEvent.VK_UP)
-					{
-						moveUp();
-						e.consume();
-					}
-					else if (e.getKeyCode() == KeyEvent.VK_ESCAPE)
-					{
-						AutoCompletePopup.this.setVisible(false);
-						e.consume();
-					}
-				}
-			}
+        addSubSuggestions();
+        updateAutoComplete();
+        
 
-			@Override
-			public void keyReleased(KeyEvent e)
-			{
-				if (e.isConsumed()) return;
+    }
 
-				if (Character.isLetterOrDigit(e.getKeyChar()) || e.getKeyCode() == KeyEvent.VK_PERIOD)
-					initiateUpdate(e);
-			}
+    private void addListenersToTextComponent()
+    {
+        KeyAdapter keyAdapter = new KeyAdapter()
+        {
 
-			private void initiateUpdate(KeyEvent e)
-			{
-				if (e.isShiftDown() && e.isControlDown())
-					searchStrategy = new LinearContainsSearch();
-				else
-					searchStrategy = new LinearSearch();
+            public void keyPressed(KeyEvent e)
+            {
+                if (e.isConsumed())
+                    return;
 
-				addSubSuggestions();
-				updateAutoComplete();
-				e.consume();
+                if (e.getKeyCode() == KeyEvent.VK_SPACE && (e.isControlDown() || e.isShiftDown()))
+                    initiateUpdate(e);
+                if (AutoCompletePopup.this.isVisible())
+                {
+                    if (e.getKeyCode() == KeyEvent.VK_ENTER)
+                    {
+                        insertSelectedItem();
+                        e.consume();
+                    }
+                    else if (e.getKeyCode() == KeyEvent.VK_DOWN)
+                    {
+                        moveDown();
+                        e.consume();
+                    }
+                    else if (e.getKeyCode() == KeyEvent.VK_UP)
+                    {
+                        moveUp();
+                        e.consume();
+                    }
+                    else if (e.getKeyCode() == KeyEvent.VK_ESCAPE)
+                    {
+                        AutoCompletePopup.this.setVisible(false);
+                        e.consume();
+                    }
+                }
+            }
 
-			}
-		};
+            @Override
+            public void keyReleased(KeyEvent e)
+            {
+//                if (e.isConsumed())
+//                    return;
+//
+//                if (Character.isLetterOrDigit(e.getKeyChar()) || e.getKeyCode() == KeyEvent.VK_PERIOD)
+//                    initiateUpdate(e);
+            }
 
-		FocusListener focusListener = new FocusAdapter()
-		{
-			@Override
-			public void focusLost(FocusEvent e)
-			{
-				AutoCompletePopup.this.setVisible(false);
-			}
-		};
+        };
 
-		textComponent.addKeyListener(keyAdapter);
-		textComponent.addFocusListener(focusListener);
-	}
+        DocumentListener documentListener;
+        documentListener = new DocumentListener()
+        {
+            @Override
+            public void insertUpdate(DocumentEvent e)
+            {
+                
+                try
+                {
+                    String text = e.getDocument().getText(e.getOffset(), e.getLength());
+                    if(text.length() > 1 )
+                        return;
+                    char character = text.charAt(0);
+                    if (Character.isLetterOrDigit(character) || character == '.')
+                        initiateUpdate(null);
+                }
+                catch (BadLocationException ex)
+                {
+                    Logger.getLogger(AutoCompletePopup.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
 
-	private void addSubSuggestions()
-	{
-		subSuggestions.clear();
-		List<AutoCompleteItem> itemsToMatch = subSuggestionsWordSearchProvider.getItemsToSearchForSubSuggestions(textComponent);
+            @Override
+            public void removeUpdate(DocumentEvent e)
+            {                
+            }
 
-		for (AutoCompleteItem autoCompleteItem : itemsToMatch)
-		{
-			AutoCompleteItem match = autoCompleteIdToItemMap.get(autoCompleteItem.getAutoCompleteId().toLowerCase());
-			if (match != null)
-				subSuggestions.addAll(match.getSubSuggestions());
-		}
-	}
+            @Override
+            public void changedUpdate(DocumentEvent e)
+            {
+            }
+        };
+                
+                
+        FocusListener focusListener = new FocusAdapter()
+        {
+            @Override
+            public void focusLost(FocusEvent e)
+            {
+                AutoCompletePopup.this.setVisible(false);
+            }
+        };
 
-	public void setAutoCompletePossibilties(List<? extends AutoCompleteItem> items)
-	{
-		this.items = new ArrayList<AutoCompleteItem>(items);
-		for (AutoCompleteItem autoCompleteItem : items)
-		{
-			autoCompleteIdToItemMap.put(autoCompleteItem.getAutoCompleteId().toLowerCase(), autoCompleteItem);
-			for (String alternateId : autoCompleteItem.alternateAutoCompeteIds())
-				autoCompleteIdToItemMap.put(alternateId.toLowerCase(), autoCompleteItem);
-		}
-		this.sortSuggestions();
-	}
+        textComponent.addKeyListener(keyAdapter);
+        textComponent.addFocusListener(focusListener);
+        textComponent.getDocument().addDocumentListener(documentListener);
+    }
 
-	public void addAutoCompletePossibility(AutoCompleteItem autoCompleteItem)
-	{
-		this.items.add(autoCompleteItem);
-		this.sortSuggestions();
-	}
+    private void addSubSuggestions()
+    {
+        subSuggestions.clear();
+        List<AutoCompleteItem> itemsToMatch = subSuggestionsWordSearchProvider.getItemsToSearchForSubSuggestions(textComponent);
 
-	private void sortSuggestions()
-	{
-		Collections.sort(this.items);
-	}
+        for (AutoCompleteItem autoCompleteItem : itemsToMatch)
+        {
+            AutoCompleteItem match = autoCompleteIdToItemMap.get(autoCompleteItem.getAutoCompleteId().toLowerCase());
+            if (match != null)
+                subSuggestions.addAll(match.getSubSuggestions());
+        }
+    }
 
-	private void updatePosition()
-	{
-		try
-		{
-			Rectangle rect = textComponent.modelToView(textComponent.getCaretPosition());
-			Point location = textComponent.getLocationOnScreen();
-			location.x += rect.x;
-			location.y += rect.y + 15;
-			this.setLocation(location);
-		}
-		catch (BadLocationException ex)
-		{
-			Logger.getLogger(AutoCompletePopup.class.getName()).log(Level.SEVERE, null, ex);
-		}
-	}
+    public void setAutoCompletePossibilties(List<? extends AutoCompleteItem> items)
+    {
+        this.items = new ArrayList<AutoCompleteItem>(items);
+        for (AutoCompleteItem autoCompleteItem : items)
+        {
+            autoCompleteIdToItemMap.put(autoCompleteItem.getAutoCompleteId().toLowerCase(), autoCompleteItem);
+            for (String alternateId : autoCompleteItem.alternateAutoCompeteIds())
+                autoCompleteIdToItemMap.put(alternateId.toLowerCase(), autoCompleteItem);
+        }
+        this.sortSuggestions();
+    }
 
-	public void updateAutoComplete()
-	{
-		updatePosition();
-		String wordPart = searchTermProvider.getSearchTerm(textComponent);
-		model.removeAllElements();
-		List<AutoCompleteItem> foundMatches = searchStrategy.search(wordPart, new ArrayList<AutoCompleteItem>(subSuggestions));
-		foundMatches.addAll(searchStrategy.search(wordPart, items));
+    public void addAutoCompletePossibility(AutoCompleteItem autoCompleteItem)
+    {
+        this.items.add(autoCompleteItem);
+        this.sortSuggestions();
+    }
 
-		model.addAll(foundMatches);
-		list.setSelectedIndex(0);
-		if (!model.isEmpty())
-			this.setVisible(true);
-		else
-			this.setVisible(false);
-	}
+    private void sortSuggestions()
+    {
+        Collections.sort(this.items);
+    }
 
-	private void insertSelectedItem()
-	{
-		AutoCompleteItem item = (AutoCompleteItem) list.getSelectedValue();
-		ArrayList wordSeparators = Lists.newArrayList(TextEditorUtils.DEFAULT_WORD_SEPARATORS);
-		if (item.getAutoCompletion().contains("."))//This is a bit of a hack for auto completions that have a . in them.  This is not a robust solution for this.
-			wordSeparators.remove(Character.valueOf('.'));
+    private void updatePosition()
+    {
+        try
+        {
+            Rectangle rect = textComponent.modelToView(textComponent.getCaretPosition());
+            Point location = textComponent.getLocationOnScreen();
+            location.x += rect.x;
+            location.y += rect.y + 15;
+            this.setLocation(location);
+        }
+        catch (BadLocationException ex)
+        {
+            Logger.getLogger(AutoCompletePopup.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
 
-		Pair<Integer, Integer> replacementWordBounds = TextEditorUtils.getWordBounds(textComponent, wordSeparators, TextEditorUtils.ExpansionDirection.LEFT);
+    public void updateAutoComplete()
+    {
+        updatePosition();
+        String wordPart = searchTermProvider.getSearchTerm(textComponent);
+        model.removeAllElements();
+        List<AutoCompleteItem> foundMatches = searchStrategy.search(wordPart, new ArrayList<AutoCompleteItem>(subSuggestions));
+        foundMatches.addAll(searchStrategy.search(wordPart, items));
 
-		String autoCompletion = item.getAutoCompletion();
+        model.addAll(foundMatches);
+        list.setSelectedIndex(0);
+        if (!model.isEmpty())
+            this.setVisible(true);
+        else
+            this.setVisible(false);
+    }
 
-		textComponent.setSelectionStart(replacementWordBounds.getFirst());
-		textComponent.setSelectionEnd(replacementWordBounds.getSecond());
-		textComponent.replaceSelection(autoCompletion);
+    private void insertSelectedItem()
+    {
+        AutoCompleteItem item = (AutoCompleteItem) list.getSelectedValue();
+        ArrayList wordSeparators = Lists.newArrayList(TextEditorUtils.DEFAULT_WORD_SEPARATORS);
+        if (item.getAutoCompletion().contains("."))//This is a bit of a hack for auto completions that have a . in them.  This is not a robust solution for this.
+            wordSeparators.remove(Character.valueOf('.'));
 
-		notifyAutoCompleteHandlers(item);
-		this.setVisible(false);
-	}
+        Pair<Integer, Integer> replacementWordBounds = TextEditorUtils.getWordBounds(textComponent, new TextEditorUtils.WordBoundsConfig().withWordSeparators(wordSeparators).withExpansionDirection(TextEditorUtils.ExpansionDirection.LEFT).withStartingPosition(textComponent.getCaretPosition()));
 
-	private void moveUp()
-	{
-		if (model.getSize() < 1) return;
-		int current = list.getSelectedIndex();
-		int newIndex = Math.max(0, current - 1);
-		list.setSelectionInterval(newIndex, newIndex);
-		list.scrollRectToVisible(list.getCellBounds(newIndex, newIndex));
-	}
+        String autoCompletion = item.getAutoCompletion();
 
-	private void moveDown()
-	{
-		if (model.getSize() < 1) return;
-		int current = list.getSelectedIndex();
-		int newIndex = Math.min(model.getSize() - 1, current + 1);
-		list.setSelectionInterval(newIndex, newIndex);
-		list.scrollRectToVisible(list.getCellBounds(newIndex, newIndex));
-	}
+        textComponent.setSelectionStart(replacementWordBounds.getFirst());
+        textComponent.setSelectionEnd(replacementWordBounds.getSecond());
+        textComponent.replaceSelection(autoCompletion);
 
-	public void addAutoCompleteHandler(AutoCompleteHandler handler)
-	{
-		autoCompleteHandlers.add(handler);
-	}
+        notifyAutoCompleteHandlers(item);
+        this.setVisible(false);
+    }
 
-	private void notifyAutoCompleteHandlers(AutoCompleteItem autoCompleteItem)
-	{
-		for (AutoCompleteHandler autoCompleteHandler : autoCompleteHandlers)
-			autoCompleteHandler.handle(autoCompleteItem);
-	}
+    private void moveUp()
+    {
+        if (model.getSize() < 1)
+            return;
+        int current = list.getSelectedIndex();
+        int newIndex = Math.max(0, current - 1);
+        list.setSelectionInterval(newIndex, newIndex);
+        list.scrollRectToVisible(list.getCellBounds(newIndex, newIndex));
+    }
+
+    private void moveDown()
+    {
+        if (model.getSize() < 1)
+            return;
+        int current = list.getSelectedIndex();
+        int newIndex = Math.min(model.getSize() - 1, current + 1);
+        list.setSelectionInterval(newIndex, newIndex);
+        list.scrollRectToVisible(list.getCellBounds(newIndex, newIndex));
+    }
+
+    public void addAutoCompleteHandler(AutoCompleteHandler handler)
+    {
+        autoCompleteHandlers.add(handler);
+    }
+
+    private void notifyAutoCompleteHandlers(AutoCompleteItem autoCompleteItem)
+    {
+        for (AutoCompleteHandler autoCompleteHandler : autoCompleteHandlers)
+            autoCompleteHandler.handle(autoCompleteItem);
+    }
 
 }

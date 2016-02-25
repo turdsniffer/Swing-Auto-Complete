@@ -90,6 +90,37 @@ public class TextEditorUtils
 
 	}
 
+        public static class WordBoundsConfig
+        {
+            private int startingPosition = 0;
+            private ExpansionDirection expansionDirection = ExpansionDirection.BOTH;
+            private List wordSeparators = DEFAULT_WORD_SEPARATORS;
+            
+            public WordBoundsConfig withStartingPosition(int startingPosition)
+            {
+                this.startingPosition = startingPosition;
+                return this;
+            }
+            
+            public WordBoundsConfig withExpansionDirection(ExpansionDirection expansionDirection)
+            {
+                this.expansionDirection = expansionDirection;
+                return this;
+            }
+            
+            public WordBoundsConfig withWordSeparators(List wordSeparators)
+            {
+                this.wordSeparators = wordSeparators;
+                return this;
+            }
+        }
+        
+        public static String getWord(JTextComponent textComponent, WordBoundsConfig wordBoundsConfig)
+        {            
+            Pair<Integer, Integer> wordBounds = getWordBounds(textComponent, wordBoundsConfig);
+            return textComponent.getText().substring(wordBounds.getFirst(), wordBounds.getSecond()).trim();
+        }
+        
 	/**
 	 * This will return the word that the caret is in or right next to.
 	 *
@@ -98,36 +129,25 @@ public class TextEditorUtils
 	 */
 	public static String getCurrentWord(JTextComponent textComponent)
 	{
-		return getCurrentWord(textComponent, DEFAULT_WORD_SEPARATORS);
+                
+		return getCurrentWord(textComponent, new WordBoundsConfig().withStartingPosition(textComponent.getCaretPosition()));
 	}
 
-	public static String getCurrentWord(JTextComponent textComponent, List wordSeparators)
+	public static String getCurrentWord(JTextComponent textComponent, WordBoundsConfig wordBoundsConfig)
 	{
-		Pair<Integer, Integer> wordBounds = getWordBounds(textComponent, wordSeparators);
+		Pair<Integer, Integer> wordBounds = getWordBounds(textComponent, wordBoundsConfig.withStartingPosition(textComponent.getCaretPosition()));
 		return textComponent.getText().substring(wordBounds.getFirst(), wordBounds.getSecond()).trim();
 	}
 
-	public static Pair<Integer, Integer> getWordBounds(JTextComponent textComponent)
-	{
-		return getWordBounds(textComponent, DEFAULT_WORD_SEPARATORS);
-	}
-
-	public static Pair<Integer, Integer> getWordBounds(JTextComponent textComponent, List wordSeparators)
-	{
-		return getWordBounds(textComponent, wordSeparators, ExpansionDirection.BOTH);
-	}
-
-	public static Pair<Integer, Integer> getWordBounds(JTextComponent textComponent, ExpansionDirection expansionDirection)
-	{
-		return getWordBounds(textComponent, DEFAULT_WORD_SEPARATORS, expansionDirection);
-	}
-
-	public static Pair<Integer, Integer> getWordBounds(JTextComponent textComponent, List wordSeparators, ExpansionDirection expansionDirection)
+	public static Pair<Integer, Integer> getWordBounds(JTextComponent textComponent, WordBoundsConfig wordBoundsConfig)
 	{
 		try
 		{
-			int startPosition = textComponent.getCaretPosition();
-			int endPosition = textComponent.getCaretPosition();
+			//int startPosition = textComponent.getCaretPosition();
+			int startPosition = wordBoundsConfig.startingPosition;
+			int endPosition = wordBoundsConfig.startingPosition;
+                        ExpansionDirection expansionDirection = wordBoundsConfig.expansionDirection;
+                        List wordSeparators =  wordBoundsConfig.wordSeparators;
 			Document document = textComponent.getDocument();
 
 			while (startPosition > 0 && (expansionDirection == ExpansionDirection.BOTH || expansionDirection == ExpansionDirection.LEFT))
@@ -155,10 +175,8 @@ public class TextEditorUtils
 		{
 			throw new IndexOutOfBoundsException("Error getting word part location not found");
 		}
-
-
 	}
-
+        
 	public static void highlightWord(JTextComponent textComponent, String word)
 	{
  		removeHighlights(textComponent);
@@ -200,7 +218,7 @@ public class TextEditorUtils
 		}
 	}
 	// An instance of the private subclass of the default highlight painter
-	private static Highlighter.HighlightPainter myHighlightPainter = new wordHighlighter(Color.orange);
+	private static Highlighter.HighlightPainter myHighlightPainter = new wordHighlighter(new Color(255, 200, 0, 128));
 
 	// A private subclass of the default highlight painter
 	private static class wordHighlighter extends DefaultHighlighter.DefaultHighlightPainter
