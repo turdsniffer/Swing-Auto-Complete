@@ -34,5 +34,5 @@ import javax.swing.text.JTextComponent;
  */
 public interface SearchTermProvider
 {
-	public String getSearchTerm(JTextComponent textComponent);
+	public String getSearchTerm(JTextComponent textComponent, Integer caratPosition);
 }

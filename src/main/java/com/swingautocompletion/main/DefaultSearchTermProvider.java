@@ -40,9 +40,9 @@ public class DefaultSearchTermProvider implements SearchTermProvider
 {
 
 	@Override
-	public String getSearchTerm(JTextComponent textComponent)
+	public String getSearchTerm(JTextComponent textComponent, Integer caratPosition)
 	{
-		Pair<Integer, Integer> currentWordBounds = TextEditorUtils.getWordBounds(textComponent, new TextEditorUtils.WordBoundsConfig().withExpansionDirection(TextEditorUtils.ExpansionDirection.LEFT).withStartingPosition(textComponent.getCaretPosition()));
+		Pair<Integer, Integer> currentWordBounds = TextEditorUtils.getWordBounds(textComponent, new TextEditorUtils.WordBoundsConfig().withExpansionDirection(TextEditorUtils.ExpansionDirection.LEFT).withStartingPosition(caratPosition));
 		return TextEditorUtils.getCurrentWord(currentWordBounds, textComponent);
 	}
 

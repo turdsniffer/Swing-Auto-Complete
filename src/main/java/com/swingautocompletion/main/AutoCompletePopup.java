@@ -125,7 +125,7 @@ public class AutoCompletePopup extends JWindow
         pack();
     }
 
-    private void initiateUpdate(KeyEvent e)
+    private void initiateUpdate(KeyEvent e, Integer numInsertedChars)
     {
         if (e != null && e.isShiftDown() && e.isControlDown())
             searchStrategy = new LinearContainsSearch();
@@ -133,7 +133,7 @@ public class AutoCompletePopup extends JWindow
             searchStrategy = new LinearSearch();
 
         addSubSuggestions();
-        updateAutoComplete();
+        updateAutoComplete(numInsertedChars);
         
 
     }
@@ -149,7 +149,10 @@ public class AutoCompletePopup extends JWindow
                     return;
 
                 if (e.getKeyCode() == KeyEvent.VK_SPACE && (e.isControlDown() || e.isShiftDown()))
-                    initiateUpdate(e);
+				{
+                    initiateUpdate(e, 0);
+					e.consume();
+				}
                 if (AutoCompletePopup.this.isVisible())
                 {
                     if (e.getKeyCode() == KeyEvent.VK_ENTER)
@@ -174,17 +177,6 @@ public class AutoCompletePopup extends JWindow
                     }
                 }
             }
-
-            @Override
-            public void keyReleased(KeyEvent e)
-            {
-//                if (e.isConsumed())
-//                    return;
-//
-//                if (Character.isLetterOrDigit(e.getKeyChar()) || e.getKeyCode() == KeyEvent.VK_PERIOD)
-//                    initiateUpdate(e);
-            }
-
         };
 
         DocumentListener documentListener;
@@ -192,8 +184,7 @@ public class AutoCompletePopup extends JWindow
         {
             @Override
             public void insertUpdate(DocumentEvent e)
-            {
-                
+            {               
                 try
                 {
                     String text = e.getDocument().getText(e.getOffset(), e.getLength());
@@ -201,7 +192,7 @@ public class AutoCompletePopup extends JWindow
                         return;
                     char character = text.charAt(0);
                     if (Character.isLetterOrDigit(character) || character == '.')
-                        initiateUpdate(null);
+                        initiateUpdate(null, e.getLength());
                 }
                 catch (BadLocationException ex)
                 {
@@ -287,10 +278,10 @@ public class AutoCompletePopup extends JWindow
         }
     }
 
-    public void updateAutoComplete()
+    public void updateAutoComplete(Integer numInsertedChars)
     {
         updatePosition();
-        String wordPart = searchTermProvider.getSearchTerm(textComponent);
+        String wordPart = searchTermProvider.getSearchTerm(textComponent, textComponent.getCaretPosition()+numInsertedChars);
         model.removeAllElements();
         List<AutoCompleteItem> foundMatches = searchStrategy.search(wordPart, new ArrayList<AutoCompleteItem>(subSuggestions));
         foundMatches.addAll(searchStrategy.search(wordPart, items));
