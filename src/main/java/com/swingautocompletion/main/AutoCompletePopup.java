@@ -25,9 +25,11 @@ package com.swingautocompletion.main;
  * THE SOFTWARE.
  * #L%
  */
+import com.google.common.collect.HashMultimap;
 import com.swingautocompletion.util.Pair;
 import com.swingautocompletion.util.TextEditorUtils;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Point;
@@ -38,10 +40,9 @@ import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -66,7 +67,7 @@ public class AutoCompletePopup extends JWindow
     private JList list;
     private PopupListModel model;
     private List<AutoCompleteItem> items = new ArrayList<AutoCompleteItem>();
-    private Map<String, AutoCompleteItem> autoCompleteIdToItemMap;
+    private Multimap<String, AutoCompleteItem> autoCompleteIdToItemMap;
     private Set<AutoCompleteItem> subSuggestions;
     private JTextComponent textComponent;
     private List<AutoCompleteHandler> autoCompleteHandlers;
@@ -85,7 +86,7 @@ public class AutoCompletePopup extends JWindow
     {
         this.propertiesWindow = new PropertiesWindow(this);
         this.subSuggestionsWordSearchProvider = subSuggestionsWordSearchProvider;
-        this.autoCompleteIdToItemMap = new HashMap<String, AutoCompleteItem>();
+        this.autoCompleteIdToItemMap = HashMultimap.<String, AutoCompleteItem>create();
         this.subSuggestions = new TreeSet<AutoCompleteItem>();
         this.searchStrategy = new LinearSearch();
         this.searchTermProvider = searchTermProvider;
@@ -233,8 +234,8 @@ public class AutoCompletePopup extends JWindow
 
         for (AutoCompleteItem autoCompleteItem : itemsToMatch)
         {
-            AutoCompleteItem match = autoCompleteIdToItemMap.get(autoCompleteItem.getAutoCompleteId().toLowerCase());
-            if (match != null)
+            Collection<AutoCompleteItem> matches = autoCompleteIdToItemMap.get(autoCompleteItem.getAutoCompleteId().toLowerCase());
+            for (AutoCompleteItem match : matches)
                 subSuggestions.addAll(match.getSubSuggestions());
         }
     }
